@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Golf Course Rolex Clock</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at top, #d1fae5 0, #6ee7b7 35%, #047857 100%);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    .course-scene {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 32px;
+      padding: 24px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .tee-box {
+      flex: 1;
+      height: 120px;
+      border-radius: 48px;
+      background: linear-gradient(to top, #166534, #22c55e);
+      position: relative;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25) inset;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 18px;
+    }
+
+    .tee-box-label {
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .clock-pylon {
+      width: min(512px, 48vw);
+      background: #064e3b;
+      border-radius: 18px;
+      padding: 18px 20px 36px;
+      box-shadow:
+        0 18px 40px rgba(0, 0, 0, 0.55),
+        0 0 0 2px #022c22;
+      position: relative;
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .clock-top {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: 1rem;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: #facc15;
+    }
+
+    .subtitle {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: #e5e7eb;
+      opacity: 0.9;
+    }
+
+    .clock-window {
+      width: 100%;
+      position: relative;
+      z-index: 1;
+      /* square shape is enforced via JS, not CSS aspect-ratio */
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .clock-digital {
+      margin-top: 10px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 0.82rem;
+    }
+
+    .clock-digital-label {
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      opacity: 0.7;
+      font-size: 0.7rem;
+    }
+
+    .clock-digital-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    .clock-digital-tz {
+      opacity: 0.7;
+      font-size: 0.75rem;
+    }
+
+    .clock-base {
+      position: absolute;
+      left: 50%;
+      bottom: -28px;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 40px;
+      background: #022c22;
+      border-radius: 999px;
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.7);
+    }
+
+    @media (max-width: 700px) {
+      .course-scene {
+        flex-direction: column-reverse;
+        align-items: center;
+      }
+
+      .tee-box {
+        width: min(460px, 92vw);
+      }
+
+      .clock-pylon {
+        width: min(260px, 70vw);
+      }
+
+      .clock-base {
+        bottom: -22px;
+        height: 32px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="course-scene">
+
+    <div class="clock-pylon" aria-label="Golf course clock showing current time">
+      <div class="clock-top">
+        <div class="brand">Beats of Golf</div>
+        <div class="subtitle">Course Time</div>
+      </div>
+
+      <div class="clock-window">
+        <canvas id="golfClock"></canvas>
+      </div>
+
+      <!-- DIGITAL CLOCK DIRECTLY BELOW THE ANALOG CLOCK -->
+      <div class="clock-digital">
+        <!-- <span class="clock-digital-label">Time</span> -->
+        <span class="clock-digital-time" id="digitalTime">--:--:--</span>
+        <span class="clock-digital-tz" id="tzLabel"></span>
+      </div>
+
+      <!-- <div class="clock-base"></div> -->
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("golfClock");
+    const ctx = canvas.getContext("2d");
+    const digitalTimeEl = document.getElementById("digitalTime");
+    const tzLabelEl = document.getElementById("tzLabel");
+
+    function pad(n) {
+      return n.toString().padStart(2, "0");
+    }
+
+    function resizeCanvas() {
+      // Force the canvas to be perfectly square based on width
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const size = rect.width;
+      const ratio = window.devicePixelRatio || 1;
+
+      canvas.width = size * ratio;
+      canvas.height = size * ratio;
+      canvas.style.width = size + "px";
+      canvas.style.height = size + "px";
+
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function drawClock() {
+      const now = new Date();
+
+      const ratio = window.devicePixelRatio || 1;
+      const w = canvas.width / ratio;
+      const h = canvas.height / ratio;
+      const r = Math.min(w, h) / 2;
+      const cx = w / 2;
+      const cy = h / 2;
+
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      // OUTER GOLD BEZEL (perfect circle)
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.98, 0, Math.PI * 2);
+      const bezelGrad = ctx.createRadialGradient(0, -r * 0.4, r * 0.2, 0, 0, r);
+      bezelGrad.addColorStop(0, "#fef9c3");
+      bezelGrad.addColorStop(0.4, "#facc15");
+      bezelGrad.addColorStop(0.7, "#a16207");
+      bezelGrad.addColorStop(1, "#fef3c7");
+      ctx.fillStyle = bezelGrad;
+      ctx.fill();
+
+      // INNER DIAL
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+      const dialGrad = ctx.createRadialGradient(0, -r * 0.4, r * 0.1, 0, 0, r);
+      dialGrad.addColorStop(0, "#fefce8");
+      dialGrad.addColorStop(0.5, "#fef9c3");
+      dialGrad.addColorStop(1, "#eab308");
+      ctx.fillStyle = dialGrad;
+      ctx.fill();
+
+      // MINUTE / HOUR MARKERS
+      for (let i = 0; i < 60; i++) {
+        const angle = (i * Math.PI * 2) / 60 - Math.PI / 2;
+        const isHour = i % 5 === 0;
+        const outer = r * 0.8;
+        const inner = r * (isHour ? 0.68 : 0.73);
+
+        ctx.beginPath();
+        ctx.moveTo(inner * Math.cos(angle), inner * Math.sin(angle));
+        ctx.lineTo(outer * Math.cos(angle), outer * Math.sin(angle));
+        ctx.lineWidth = isHour ? r * 0.03 : r * 0.012;
+        ctx.strokeStyle = "#1f2933";
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
+      // NUMERALS AT 12, 3, 6, 9
+      const labelRadius = r * 0.52;
+      ctx.fillStyle = "#1f2933";
+      ctx.font = `${r * 0.16}px "Georgia", "Times New Roman", serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("12", 0, -labelRadius);
+      ctx.fillText("3", labelRadius, 0);
+      ctx.fillText("6", 0, labelRadius);
+      ctx.fillText("9", -labelRadius, 0);
+
+      // TIME CALCULATION
+      const sec = now.getSeconds() + now.getMilliseconds() / 1000;
+      const min = now.getMinutes() + sec / 60;
+      const hr = (now.getHours() % 12) + min / 60;
+
+      // HOUR HAND
+      const hourAngle = (Math.PI * 2 * (hr / 12)) - Math.PI / 2;
+      ctx.save();
+      ctx.rotate(hourAngle);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.08, 0);
+      ctx.lineTo(r * 0.45, 0);
+      ctx.lineWidth = r * 0.06;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#1f2933";
+      ctx.stroke();
+      ctx.restore();
+
+      // MINUTE HAND
+      const minuteAngle = (Math.PI * 2 * (min / 60)) - Math.PI / 2;
+      ctx.save();
+      ctx.rotate(minuteAngle);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.12, 0);
+      ctx.lineTo(r * 0.64, 0);
+      ctx.lineWidth = r * 0.04;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#1f2933";
+      ctx.stroke();
+      ctx.restore();
+
+      // SECOND HAND (slender green)
+      const secondAngle = (Math.PI * 2 * (sec / 60)) - Math.PI / 2;
+      ctx.save();
+      ctx.rotate(secondAngle);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.15, 0);
+      ctx.lineTo(r * 0.7, 0);
+      ctx.lineWidth = r * 0.018;
+      ctx.strokeStyle = "#166534";
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Counterweight
+      ctx.beginPath();
+      ctx.arc(-r * 0.09, 0, r * 0.04, 0, Math.PI * 2);
+      ctx.fillStyle = "#166534";
+      ctx.fill();
+      ctx.restore();
+
+      // CENTER CAP
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.035, 0, Math.PI * 2);
+      ctx.fillStyle = "#1f2933";
+      ctx.fill();
+
+      ctx.restore();
+
+      // DIGITAL TIME UNDER THE CLOCK
+      const hh = pad(now.getHours());
+      const mm = pad(now.getMinutes());
+      const ss = pad(now.getSeconds());
+      digitalTimeEl.textContent = `${hh}:${mm}:${ss}`;
+    }
+
+    function updateTimezoneLabel() {
+      try {
+        const fmt = new Intl.DateTimeFormat(undefined, {
+          timeZoneName: "short"
+        });
+        const parts = fmt.formatToParts(new Date());
+        const tzPart = parts.find(p => p.type === "timeZoneName");
+        tzLabelEl.textContent = tzPart ? tzPart.value : "";
+      } catch {
+        tzLabelEl.textContent = "";
+      }
+    }
+
+    function tick() {
+      drawClock();
+      requestAnimationFrame(tick);
+    }
+
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      drawClock();
+    });
+
+    // Init
+    resizeCanvas();
+    updateTimezoneLabel();
+    tick();
+  </script>
+</body>
+</html>
